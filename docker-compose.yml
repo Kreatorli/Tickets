@@ -1,0 +1,237 @@
+services:
+  # NATS Streaming Service
+  nats-streaming:
+    image: nats:latest
+    container_name: nats-streaming
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: "-sd /data"
+    volumes:
+      - nats-data:/data
+    networks:
+      - tickets-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4222"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Auth Service
+  auth-db:
+    image: mongo:6.0
+    container_name: auth-db
+    environment:
+      MONGO_INITDB_DATABASE: auth
+    volumes:
+      - auth-db-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - tickets-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Orders Service
+  orders-db:
+    image: mongo:6.0
+    container_name: orders-db
+    environment:
+      MONGO_INITDB_DATABASE: orders
+    volumes:
+      - orders-db-data:/data/db
+    ports:
+      - "27018:27017"
+    networks:
+      - tickets-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Tickets Service
+  tickets-db:
+    image: mongo:6.0
+    container_name: tickets-db
+    environment:
+      MONGO_INITDB_DATABASE: tickets
+    volumes:
+      - tickets-db-data:/data/db
+    ports:
+      - "27019:27017"
+    networks:
+      - tickets-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Payments Service
+  payments-db:
+    image: mongo:6.0
+    container_name: payments-db
+    environment:
+      MONGO_INITDB_DATABASE: payments
+    volumes:
+      - payments-db-data:/data/db
+    ports:
+      - "27020:27017"
+    networks:
+      - tickets-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Expiration Service
+  expiration-db:
+    image: mongo:6.0
+    container_name: expiration-db
+    environment:
+      MONGO_INITDB_DATABASE: expiration
+    volumes:
+      - expiration-db-data:/data/db
+    ports:
+      - "27021:27017"
+    networks:
+      - tickets-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service
+  auth:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: auth-service
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://auth-db:27017/auth
+      NATS_URL: nats://nats-streaming:4222
+      JWT_KEY: ${JWT_KEY:-your-secret-jwt-key}
+      SALT_FACTORY: ${SALT_FACTORY:-10}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      nats-streaming:
+        condition: service_started
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # Orders Service
+  orders:
+    build:
+      context: ./orders
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: orders-service
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://orders-db:27017/orders
+      NATS_URL: nats://nats-streaming:4222
+      JWT_KEY: ${JWT_KEY:-your-secret-jwt-key}
+    depends_on:
+      orders-db:
+        condition: service_healthy
+      nats-streaming:
+        condition: service_started
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # Tickets Service
+  tickets:
+    build:
+      context: ./tickets
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: tickets-service
+    ports:
+      - "3002:3000"
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://tickets-db:27017/tickets
+      NATS_URL: nats://nats-streaming:4222
+      JWT_KEY: ${JWT_KEY:-your-secret-jwt-key}
+    depends_on:
+      tickets-db:
+        condition: service_healthy
+      nats-streaming:
+        condition: service_started
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # Payments Service
+  payments:
+    build:
+      context: ./payments
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: payments-service
+    ports:
+      - "3003:3000"
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://payments-db:27017/payments
+      NATS_URL: nats://nats-streaming:4222
+      JWT_KEY: ${JWT_KEY:-your-secret-jwt-key}
+      STRIPE_KEY: ${STRIPE_KEY:-your-stripe-key}
+    depends_on:
+      payments-db:
+        condition: service_healthy
+      nats-streaming:
+        condition: service_started
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # Expiration Service
+  expiration:
+    build:
+      context: ./expiration
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: expiration-service
+    ports:
+      - "3004:3000"
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://expiration-db:27017/expiration
+      NATS_URL: nats://nats-streaming:4222
+      JWT_KEY: ${JWT_KEY:-your-secret-jwt-key}
+    depends_on:
+      expiration-db:
+        condition: service_healthy
+      nats-streaming:
+        condition: service_started
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+volumes:
+  nats-data:
+  auth-db-data:
+  orders-db-data:
+  tickets-db-data:
+  payments-db-data:
+  expiration-db-data:
+
+networks:
+  tickets-network:
+    driver: bridge
