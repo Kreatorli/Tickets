@@ -7,6 +7,9 @@ import { ExpirationCompleteListener } from "./events/listener/expiration-complet
 import { PaymentCreatedListener } from "./events/listener/payment-created-listener";
 
 const start = async () => {
+  if (!process.env.REDIS_HOST) {
+  throw new Error("REDIS_HOST must be defined");
+  }
   if (!process.env.JWT_KEY || !process.env.SALT_FACTORY) {
     throw new Error("JWT_KEY must be defined");
   }

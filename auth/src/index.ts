@@ -21,9 +21,13 @@ const start = async () => {
     return;
   }
 
-  app.listen(3001, () => {
-    console.log("Auth: Listening on port 3001 🚀");
-  });
+  app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+app.listen(3000, () => {
+  console.log('Auth: Listening on port 3000 🚀');
+});
 };
 
 start();
