@@ -1,0 +1,238 @@
+version: "3.9"
+
+services:
+
+  # ==============================
+  # Redis
+  # ==============================
+  redis:
+    image: redis:7
+    container_name: tickets-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # ==============================
+  # Redis Commander
+  # ==============================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # ==============================
+  # NATS Streaming (STAN)
+  # ==============================
+  nats-streaming:
+    image: nats-streaming:0.25.6
+    container_name: nats-streaming
+    command:
+      [
+        "-p", "4222",
+        "-m", "8222",
+        "-hbi", "5s",
+        "-hbt", "5s",
+        "-hbf", "2",
+        "-SD",
+        "-cid", "ticketing"
+      ]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats-data:/data
+    networks:
+      - tickets-network
+
+  # ==============================
+  # Mongo Databases
+  # ==============================
+  auth-db:
+    image: mongo:6.0
+    volumes:
+      - auth-db-data:/data/db
+    networks:
+      - tickets-network
+
+  orders-db:
+    image: mongo:6.0
+    volumes:
+      - orders-db-data:/data/db
+    networks:
+      - tickets-network
+
+  tickets-db:
+    image: mongo:6.0
+    volumes:
+      - tickets-db-data:/data/db
+    networks:
+      - tickets-network
+
+  payments-db:
+    image: mongo:6.0
+    volumes:
+      - payments-db-data:/data/db
+    networks:
+      - tickets-network
+
+  expiration-db:
+    image: mongo:6.0
+    volumes:
+      - expiration-db-data:/data/db
+    networks:
+      - tickets-network
+
+  # ==============================
+  # Auth Service
+  # ==============================
+  auth:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      MONGO_URI: mongodb://auth-db:27017/auth
+      NATS_URL: nats://nats-streaming:4222
+      NATS_CLUSTER_ID: ticketing
+      NATS_CLIENT_ID: auth-service
+      JWT_KEY: ${JWT_KEY}
+      SALT_FACTORY: ${SALT_FACTORY}
+    depends_on:
+      - auth-db
+      - nats-streaming
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # ==============================
+  # Orders Service
+  # ==============================
+  orders:
+    build:
+      context: ./orders
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      MONGO_URI: mongodb://orders-db:27017/orders
+      NATS_URL: nats://nats-streaming:4222
+      NATS_CLUSTER_ID: ticketing
+      NATS_CLIENT_ID: orders-service
+      JWT_KEY: ${JWT_KEY}
+      SALT_FACTORY: ${SALT_FACTORY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - orders-db
+      - nats-streaming
+    networks:
+      - tickets-network
+    restart: "no"
+
+  # ==============================
+  # Tickets Service
+  # ==============================
+  tickets:
+    build:
+      context: ./tickets
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "3002:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      MONGO_URI: mongodb://tickets-db:27017/tickets
+      NATS_URL: nats://nats-streaming:4222
+      NATS_CLUSTER_ID: ticketing
+      NATS_CLIENT_ID: tickets-service
+      JWT_KEY: ${JWT_KEY}
+      SALT_FACTORY: ${SALT_FACTORY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - tickets-db
+      - nats-streaming
+      - redis
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # ==============================
+  # Payments Service
+  # ==============================
+  payments:
+    build:
+      context: ./payments
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "3003:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      MONGO_URI: mongodb://payments-db:27017/payments
+      NATS_URL: nats://nats-streaming:4222
+      NATS_CLUSTER_ID: ticketing
+      NATS_CLIENT_ID: payments-service
+      JWT_KEY: ${JWT_KEY}
+      STRIPE_KEY: ${STRIPE_KEY}
+      SALT_FACTORY: ${SALT_FACTORY}
+    depends_on:
+      - payments-db
+      - nats-streaming
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+  # ==============================
+  # Expiration Service
+  # ==============================
+  expiration:
+    build:
+      context: ./expiration
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "3004:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      NATS_URL: nats://nats-streaming:4222
+      NATS_CLUSTER_ID: ticketing
+      NATS_CLIENT_ID: expiration-service
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - nats-streaming
+      - redis
+    networks:
+      - tickets-network
+    restart: unless-stopped
+
+volumes:
+  nats-data:
+  auth-db-data:
+  orders-db-data:
+  tickets-db-data:
+  payments-db-data:
+  expiration-db-data:
+  redis-data:
+
+networks:
+  tickets-network:
+    driver: bridge
