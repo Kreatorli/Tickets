@@ -1,0 +1,180 @@
+### Tickets Microservices API Testing
+### Base URLs
+@authUrl = http://localhost:3000
+@ordersUrl = http://localhost:3001
+@ticketsUrl = http://localhost:3002
+@paymentsUrl = http://localhost:3003
+
+### Variables (UPDATE AFTER CREATING RESOURCES)
+@ticketId = UPDATE_WITH_TICKET_ID
+@orderId = UPDATE_WITH_ORDER_ID
+
+################################################################################
+### 🔐 AUTH SERVICE (Port 3000)
+################################################################################
+
+### 1. Sign Up - Create New User
+POST {{authUrl}}/api/users/signup
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123",
+  "userName": "testuser"
+}
+
+### 2. Sign In - Login User
+POST {{authUrl}}/api/users/signin
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### 3. Get Current User
+GET {{authUrl}}/api/users/currentuser
+
+### 4. Sign Out
+POST {{authUrl}}/api/users/signout
+
+
+################################################################################
+### 🎫 TICKETS SERVICE (Port 3002)
+################################################################################
+
+### 5. Create New Ticket (Requires Auth)
+# Make sure you're signed in first!
+POST {{ticketsUrl}}/api/tickets
+Content-Type: application/json
+
+{
+  "title": "Concert Ticket - Charlie puth",
+  "price": 150
+}
+
+### 6. Get All Tickets
+GET {{ticketsUrl}}/api/tickets
+
+### 7. Get All Tickets (Alternative Endpoint with Redis Caching)
+GET {{ticketsUrl}}/api/ticket
+
+### 8. Get Ticket By ID
+# Replace {{ticketId}} with actual ticket ID from create response
+GET {{ticketsUrl}}/api/tickets/{{ticketId}}
+
+### 9. Update Ticket (Requires Auth & Ownership)
+# Replace {{ticketId}} with actual ticket ID
+PUT {{ticketsUrl}}/api/tickets/{{ticketId}}
+Content-Type: application/json
+
+{
+  "title": "Concert Ticket - The Weeknd (Updated)",
+  "price": 175
+}
+
+
+################################################################################
+### 📦 ORDERS SERVICE (Port 3001)
+################################################################################
+
+### 10. Create New Order (Requires Auth)
+# Replace {{ticketId}} with actual ticket ID
+POST {{ordersUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "ticketId": "{{ticketId}}"
+}
+
+### 11. Get All Orders for Current User (Requires Auth)
+GET {{ordersUrl}}/api/orders
+
+### 12. Get Order By ID (Requires Auth & Ownership)
+# Replace {{orderId}} with actual order ID
+GET {{ordersUrl}}/api/orders/{{orderId}}
+
+### 13. Cancel Order (Requires Auth & Ownership)
+# Replace {{orderId}} with actual order ID
+DELETE {{ordersUrl}}/api/orders/{{orderId}}
+
+
+################################################################################
+### 💳 PAYMENTS SERVICE (Port 3003)
+################################################################################
+
+### 14. Process Payment (Requires Auth)
+# Replace {{orderId}} with actual order ID
+POST {{paymentsUrl}}/api/payments
+Content-Type: application/json
+
+{
+  "token": "tok_visa",
+  "orderId": "{{orderId}}"
+}
+
+
+################################################################################
+### 📝 TESTING WORKFLOW
+################################################################################
+
+### RECOMMENDED TESTING SEQUENCE:
+
+# 1. Sign Up (Request #1)
+#    - Copy the user info
+
+# 2. Sign In (Request #2)
+#    - This sets the session cookie
+
+# 3. Check Current User (Request #3)
+#    - Verify you're logged in
+
+# 4. Create a Ticket (Request #5)
+#    - Copy the ticket "id" from response
+#    - Update @ticketId variable above with this ID
+
+# 5. Get All Tickets (Request #6)
+#    - Verify your ticket appears
+
+# 6. Get Ticket By ID (Request #8)
+#    - Should show your specific ticket
+
+# 7. Update Ticket (Request #9)
+#    - Only works if you own the ticket
+
+# 8. Create an Order (Request #10)
+#    - Use the ticketId from step 4
+#    - Copy the order "id" from response
+#    - Update @orderId variable above with this ID
+
+# 9. Get All Orders (Request #11)
+#    - Should show your order
+
+# 10. Get Order By ID (Request #12)
+#     - Should show specific order details
+
+# 11. Process Payment (Request #14)
+#     - Use the orderId from step 8
+
+# 12. Cancel Order (Request #13)
+#     - Optional: Cancel the order if needed
+
+
+################################################################################
+### 🔧 TROUBLESHOOTING
+################################################################################
+
+# Issue: "Unauthorized" or "currentUser is null"
+# Solution: Make sure to Sign In first (Request #2)
+#           Cookies are automatically handled by VS Code REST Client
+
+# Issue: Can't update or delete resources
+# Solution: You can only modify resources you created
+#           Make sure you're signed in with the same user
+
+# Issue: "Ticket is already reserved"
+# Solution: Create a new ticket or cancel the existing order
+
+# Issue: Order expiration
+# Solution: Orders expire after 15 minutes
+#           Create a new order if yours expired
