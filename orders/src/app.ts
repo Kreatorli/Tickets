@@ -29,4 +29,8 @@ app.use(indexOrderRouter);
 app.use(newOrderRouter);
 app.use(showOrderRouter);
 
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 export { app };

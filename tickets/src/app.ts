@@ -12,6 +12,10 @@ import { getTicketsRouter } from "./routes/getTickets";
 
 const app = express();
 
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
 app.set("trust proxy", true);
 
 app.use(
